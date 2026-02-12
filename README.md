@@ -57,10 +57,14 @@ use {
 
 ## 🚀 Usage
 
-1.  Open a Python file (`.py`), Go file (`.go`), or Lua file (`.lua`).
+**To start the live runner:**
+1.  Open a Python file (`.py`), Go file (`.go`), Lua file (`.lua`), or JavaScript file (`.js`).
 2.  Run the command `:LiveRun`.
 3.  This will open a new split window to show the output of your code.
 4.  Start coding! Any changes you make will be executed automatically, and the output window will update in real-time.
+
+**To stop the live runner:**
+- Run the command `:LiveRun stop` to stop the server and close the output window.
 
 ## ⚙️ Configuration
 
@@ -75,7 +79,7 @@ require("live-runner").setup({
 
 ## 🛣️ Roadmap
 
-*   [ ] Support for more languages (JavaScript, Ruby, etc.)
+*   [ ] Support for more languages (Ruby, Typescript, Perl etc.)
 *   [ ] More robust error handling.
 *   [ ] Customizable output window layout.
 

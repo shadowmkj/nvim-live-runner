@@ -34,11 +34,11 @@ end
 
 function M.start()
 	local bin = M.config.bin_path or get_binary_path()
+	ensure_output_window()
 	if server_job_id then
 		print("Server already running")
 		return
 	end
-	ensure_output_window()
 	local buffer_extension = vim.api.nvim_buf_get_name(0):match("^.+(%..+)$")
 	server_job_id = vim.fn.jobstart({ bin, buffer_extension }, {
 		stdout_buffered = false,
@@ -90,10 +90,22 @@ end
 
 function M.setup(opts)
 	M.config = vim.tbl_deep_extend("force", M.config, opts or {})
-	vim.api.nvim_create_user_command("LiveRun", function()
-		M.start()
-		M.attach()
-	end, {})
+	vim.api.nvim_create_user_command("LiveRun", function(opts)
+		if #opts.args == 0 then
+			M.start()
+			M.attach()
+        else
+            if server_job_id then
+                vim.fn.jobstop(server_job_id)
+                server_job_id = nil
+            end
+            if output_win then
+                vim.api.nvim_win_close(output_win, true)
+                output_win = nil
+            end
+        end
+
+	end, { nargs = "?" })
 end
 
 return M
