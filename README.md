@@ -1,21 +1,22 @@
 # nvim-live-runner 🚀
 
-A simple, real-time code runner for Neovim that gives you instant feedback on your code. Write Python or Go and see the results live, right in your editor!
+A simple, real-time code runner for Neovim that gives you instant feedback on your code. Write Python, Go, or Lua and see the results live, right in your editor!
 
 <!-- ![demo](https://user-images.githubusercontent.com/8619876/184493322-132d74c3-b50a-4299-a417-03ea54832502.gif) -->
 <!-- *(Demo GIF is a placeholder, but illustrates the concept)* -->
 
-This plugin is in its early stages. Currently, it supports **Python** and **Go**, with plans to expand to more languages soon.
+This plugin is in its early stages. Currently, it supports **Python**, **Go**, and **Lua**, with plans to expand to more languages soon.
 
 ## ✨ Features
 
-*   **Live Feedback:** Get instant results from your Python or Go code as you type.
+*   **Live Feedback:** Get instant results from your Python, Go, or Lua code as you type.
 *   **Simple & Lightweight:** No complex setup. Just install and go.
 *   **Go-powered Backend:** A fast and reliable backend server to execute your code.
 
 ## ✅ Requirements
 
 *   [Go](https://go.dev/doc/install) (v1.18 or higher) must be installed on your system for the backend server.
+*   [Lua](https://www.lua.org/download.html) (v5.1 or higher) must be installed on your system for running Lua code.
 *   Neovim >= 0.7
 
 ## 📦 Installation
@@ -48,7 +49,7 @@ use {
 
 ## 🚀 Usage
 
-1.  Open a Python file (`.py`) or Go file (`.go`).
+1.  Open a Python file (`.py`), Go file (`.go`), or Lua file (`.lua`).
 2.  Run the command `:LiveRun`.
 3.  This will open a new split window to show the output of your code.
 4.  Start coding! Any changes you make will be executed automatically, and the output window will update in real-time.

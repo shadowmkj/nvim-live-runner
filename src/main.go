@@ -20,7 +20,6 @@ func handleConnection(conn net.Conn, lang string) {
 	for {
 		len, err := conn.Read(buffer)
 		if err != nil {
-
 			if err == io.EOF {
 				conn.Close()
 				return
@@ -77,6 +76,13 @@ func executeBuffer(source string, lang string) ([]byte, string, error) {
 	switch lang {
 	case ".py":
 		cmd := exec.Command("python3", "-c", source)
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, "", errors.New("Error executing command: " + err.Error() + "\n" + string(out))
+		}
+		return out, "", nil
+	case ".lua":
+		cmd := exec.Command("lua", "-e", source)
 		out, err := cmd.Output()
 		if err != nil {
 			return nil, "", errors.New("Error executing command: " + err.Error() + "\n" + string(out))
