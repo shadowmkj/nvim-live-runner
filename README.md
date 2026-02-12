@@ -1,22 +1,30 @@
 # nvim-live-runner 🚀
 
-A simple, real-time code runner for Neovim that gives you instant feedback on your code. Write Python, Go, or Lua and see the results live, right in your editor!
+A simple, real-time code runner for Neovim that gives you instant feedback on your code. Write your code and see the results live, right in your editor!
 
-<!-- ![demo](https://user-images.githubusercontent.com/8619876/184493322-132d74c3-b50a-4299-a417-03ea54832502.gif) -->
+<!-- ![demo](https://user-images.github.8619876/184493322-132d74c3-b50a-4299-a417-03ea54832502.gif) -->
 <!-- *(Demo GIF is a placeholder, but illustrates the concept)* -->
 
-This plugin is in its early stages. Currently, it supports **Python**, **Go**, and **Lua**, with plans to expand to more languages soon.
+This plugin is in its early stages.
 
 ## ✨ Features
 
-*   **Live Feedback:** Get instant results from your Python, Go, or Lua code as you type.
+*   **Live Feedback:** Get instant results from your code as you type.
 *   **Simple & Lightweight:** No complex setup. Just install and go.
 *   **Go-powered Backend:** A fast and reliable backend server to execute your code.
+
+## 🌍 Supported Languages
+
+*   **Python** (`.py`)
+*   **Go** (`.go`)
+*   **Lua** (`.lua`)
+*   **JavaScript** (`.js`)
 
 ## ✅ Requirements
 
 *   [Go](https://go.dev/doc/install) (v1.18 or higher) must be installed on your system for the backend server.
 *   [Lua](https://www.lua.org/download.html) (v5.1 or higher) must be installed on your system for running Lua code.
+*   [Node.js](https://nodejs.org/en/download/) (v16 or higher) must be installed on your system for running JavaScript code.
 *   Neovim >= 0.7
 
 ## 📦 Installation

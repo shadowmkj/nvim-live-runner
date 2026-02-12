@@ -88,6 +88,13 @@ func executeBuffer(source string, lang string) ([]byte, string, error) {
 			return nil, "", errors.New("Error executing command: " + err.Error() + "\n" + string(out))
 		}
 		return out, "", nil
+	case ".js":
+		cmd := exec.Command("node", "-e", source)
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, "", errors.New("Error executing command: " + err.Error() + "\n" + string(out))
+		}
+		return out, "", nil
 	case ".go":
 		tmpFile, err := os.CreateTemp("", "temp-*.go")
 		if err != nil {

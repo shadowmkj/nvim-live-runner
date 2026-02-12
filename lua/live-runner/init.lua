@@ -81,7 +81,7 @@ function M.attach()
 
 	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		group = group,
-		pattern = { "*.py", "*.go", "*.lua" },
+		pattern = { "*.py", "*.go", "*.lua", "*.js" },
 		callback = function()
 			send_buffer_to_tcp()
 		end,
