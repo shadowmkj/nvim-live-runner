@@ -1,44 +1,115 @@
 # nvim-live-runner 🚀
 
-A simple, real-time code runner for Neovim that gives you instant feedback on your code. Write your code and see the results live, right in your editor!
+[![Neovim](https://img.shields.io/badge/Neovim-0.7+-57A143.svg?style=for-the-badge&logo=neovim&logoColor=white)](https://neovim.io)
+[![Go Version](https://img.shields.io/badge/Go-1.18+-00ADD8.svg?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-<!-- ![demo](https://user-images.github.8619876/184493322-132d74c3-b50a-4299-a417-03ea54832502.gif) -->
-<!-- *(Demo GIF is a placeholder, but illustrates the concept)* -->
+A simple, real-time code runner for Neovim that provides instant feedback as you write code. Type in your Neovim buffer and see execution results update live in a split output window!
 
-This plugin is in its early stages.
+---
+
+## ⚡ Quick Navigation
+
+| 🚀 [Quick Start](#-usage) | 📦 [Installation](#-installation) | ⚙️ [Configuration](#-configuration) | 🐛 [Troubleshooting](#-troubleshooting--faq) |
+|---|---|---|---|
+
+---
+
+## 📚 Table of Contents
+
+- [✨ Features](#-features)
+- [🏗️ Architecture & How It Works](#️-architecture--how-it-works)
+- [🌍 Supported Languages](#-supported-languages)
+- [✅ Requirements](#-requirements)
+- [📦 Installation](#-installation)
+  - [lazy.nvim](#lazynvim)
+  - [packer.nvim](#packernvim)
+  - [vim-plug](#vim-plug)
+  - [Manual Compilation](#manual-compilation)
+- [🚀 Usage](#-usage)
+  - [Commands](#commands)
+  - [Keymap Example](#keymap-example)
+- [⚙️ Configuration](#-configuration)
+  - [Configuration Options](#configuration-options)
+  - [Environment Variables](#environment-variables)
+- [🐛 Troubleshooting & FAQ](#-troubleshooting--faq)
+- [🛣️ Roadmap](#-roadmap)
+- [❤️ Contributing](#️-contributing)
+- [📄 License](#-license)
+
+---
 
 ## ✨ Features
 
-*   **Live Feedback:** Get instant results from your code as you type.
-*   **Simple & Lightweight:** No complex setup. Just install and go.
-*   **Go-powered Backend:** A fast and reliable backend server to execute your code.
+- **⚡ Instant Live Feedback**: See code execution output update dynamically as you type (`TextChanged` and `TextChangedI`).
+- **🚀 High Performance Backend**: Powered by a lightweight Go TCP server for minimal CPU usage and fast execution.
+- **🔄 Dynamic Language Detection**: Seamlessly switch between Python, Go, Lua, and JavaScript buffers without restarting the backend process.
+- **⏱️ Smart Debouncing**: Built-in 250ms debouncer prevents CPU thrashing during rapid keystrokes.
+- **🛡️ Process Timeout Protection**: Automatically terminates runaway scripts or infinite loops to keep Neovim responsive.
+- **📦 Zero Heavy Dependencies**: Simple Lua frontend paired with a standalone compiled Go binary.
+
+---
+
+## 🏗️ Architecture & How It Works
+
+```
+ ┌──────────────────┐           TCP Socket           ┌─────────────────────┐
+ │  Neovim Editor   │ ─────────────────────────────> │  Go Backend Server  │
+ │ (Buffer Changes) │     Payload: .py\n<code>        │  (src/server :port) │
+ └────────┬─────────┘                                └──────────┬──────────┘
+          │                                                     │
+          │  Displays Output                                    │ Executes via
+          ▼                                                     ▼
+ ┌──────────────────┐                                ┌─────────────────────┐
+ │ Live Output Split│ <───────────────────────────── │ Language Runtime    │
+ │ (Scratch Buffer) │        stdout / stderr         │ (python, node, etc) │
+ └──────────────────┘                                └─────────────────────┘
+```
+
+1. **Buffer Event**: When text changes in an active supported buffer, Neovim triggers an autocommand.
+2. **TCP Stream**: The Lua client sends the file extension header and full buffer contents over TCP to `127.0.0.1:<port>`.
+3. **Debounced Execution**: The Go server debounces incoming payloads, executes the code using the matching runtime, and captures output.
+4. **Live Stream**: Terminal output is streamed back to Neovim's `LiveRunner Output` split window in real time.
+
+---
 
 ## 🌍 Supported Languages
 
-*   **Python** (`.py`)
-*   **Go** (`.go`)
-*   **Lua** (`.lua`)
-*   **JavaScript** (`.js`)
+| Language | Extension | Default Runtime Command |
+|---|---|---|
+| **Python** | `.py` | `python3` |
+| **Go** | `.go` | `go run` |
+| **Lua** | `.lua` | `lua` |
+| **JavaScript** | `.js` | `node` |
+
+---
 
 ## ✅ Requirements
 
-*   [Go](https://go.dev/doc/install) (v1.18 or higher) must be installed on your system for the backend server.
-*   [Lua](https://www.lua.org/download.html) (v5.1 or higher) must be installed on your system for running Lua code.
-*   [Node.js](https://nodejs.org/en/download/) (v16 or higher) must be installed on your system for running JavaScript code.
-*   Neovim >= 0.7
+Before installing, ensure the following dependencies are available on your system path:
+
+- **Neovim**: `>= 0.7.0`
+- **Go**: `>= 1.18` (Required to compile and run the backend server)
+- **Language Runtimes**:
+  - Python: `python3`
+  - Node.js: `node` (v16+)
+  - Lua: `lua` (v5.1+)
+
+---
 
 ## 📦 Installation
-
-Install with your favorite plugin manager.
 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 return {
     "shadowmkj/nvim-live-runner",
-    build = "cd src && go build -o server", -- This compiles the binary on install
-    config = function()
-        require("live-runner").setup({})
+    build = "cd src && go build -o server", -- Compiles backend server on install/update
+    opts = {
+        port = 65432,
+    },
+    config = function(_, opts)
+        require("live-runner").setup(opts)
     end,
 }
 ```
@@ -50,43 +121,115 @@ use {
     "shadowmkj/nvim-live-runner",
     run = "cd src && go build -o server",
     config = function()
-        require("live-runner").setup({})
+        require("live-runner").setup({
+            port = 65432,
+        })
     end,
 }
 ```
 
-## 🚀 Usage
+### [vim-plug](https://github.com/junegunn/vim-plug)
 
-**To start the live runner:**
-1.  Open a Python file (`.py`), Go file (`.go`), Lua file (`.lua`), or JavaScript file (`.js`).
-2.  Run the command `:LiveRun`.
-3.  This will open a new split window to show the output of your code.
-4.  Start coding! Any changes you make will be executed automatically, and the output window will update in real-time.
-
-**To stop the live runner:**
-- Run the command `:LiveRun stop` to stop the server and close the output window.
-
-## ⚙️ Configuration
-
-You can pass a configuration table to the `setup()` function. Here are the default values:
-
-```lua
-require("live-runner").setup({
-    port = 65432, -- The port for the server to listen on
-    bin_path = nil, -- Path to the server binary. Defaults to the one built by the plugin.
-})
+```vim
+Plug 'shadowmkj/nvim-live-runner', { 'do': 'cd src && go build -o server' }
 ```
 
-## 🛣️ Roadmap
+### Manual Compilation
 
-*   [ ] Support for more languages (Ruby, Typescript, Perl etc.)
-*   [ ] More robust error handling.
-*   [ ] Customizable output window layout.
+If you prefer to compile the backend server binary manually:
 
-## ❤️ Contributing
-
-Contributions, issues, and feature requests are welcome!
+```bash
+cd ~/.local/share/nvim/plugged/nvim-live-runner/src
+go build -o server
+```
 
 ---
 
-Made with ❤️ by shadowmkj
+## 🚀 Usage
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `:LiveRun` | Starts the live runner server and opens the split output window. |
+| `:LiveRun stop` | Stops the live runner background process and closes the output split window. |
+
+### Keymap Example
+
+Add keybindings to your Neovim configuration (`init.lua`):
+
+```lua
+-- Toggle LiveRunner with <leader>lr and stop with <leader>lq
+vim.keymap.set("n", "<leader>lr", "<cmd>LiveRun<cr>", { desc = "Start Live Runner" })
+vim.keymap.set("n", "<leader>lq", "<cmd>LiveRun stop<cr>", { desc = "Stop Live Runner" })
+```
+
+---
+
+## ⚙️ Configuration
+
+Pass a configuration table to `setup()` to override default settings:
+
+```lua
+require("live-runner").setup({
+    port = 65432,         -- TCP port for the server to listen on
+    bin_path = nil,       -- Custom path to the server binary (defaults to plugin src/server)
+})
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `port` | `number` | `65432` | TCP port used for communication between Neovim and the Go backend. |
+| `bin_path` | `string|nil` | `nil` | Absolute path to custom `server` executable. If `nil`, auto-resolves to `src/server`. |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `NLR_TIMEOUT_MS` | `2000` | Code execution timeout in milliseconds before terminating long-running processes. |
+
+Example:
+```bash
+export NLR_TIMEOUT_MS=5000  # Sets timeout to 5 seconds
+```
+
+---
+
+## 🐛 Troubleshooting & FAQ
+
+#### Q: Error `LiveRunner: Server binary not found at ...`
+> **Solution**: The backend Go binary hasn't been compiled yet. Run `cd src && go build -o server` inside the plugin installation directory.
+
+#### Q: Code output isn't updating as I type
+> **Solution**: Ensure your file has a supported extension (`.py`, `.go`, `.lua`, or `.js`) and that the corresponding language runtime (`python3`, `go`, `lua`, `node`) is executable in your terminal `$PATH`.
+
+#### Q: Port `65432` is already in use
+> **Solution**: Update the port number in your setup configuration:
+> ```lua
+> require("live-runner").setup({ port = 54321 })
+> ```
+
+---
+
+## 🛣️ Roadmap
+
+- [ ] Support for temporary file execution across all interpreters.
+- [ ] Configurable output split position (bottom, right, or floating window).
+- [ ] Add support for Rust (`rustc`), C/C++ (`gcc`/`clang`), and TypeScript (`tsx`).
+- [ ] Statusline component integration (`lualine.nvim`).
+
+---
+
+## ❤️ Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/shadowmkj/nvim-live-runner/issues).
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for details.
+
+Made with ❤️ by [shadowmkj](https://github.com/shadowmkj)
