@@ -153,7 +153,7 @@ go build -o server
 |---|---|
 | `:LiveRun` | Starts the live runner server and opens the split output window. |
 | `:LiveRun stop` | Stops the live runner background process and closes the output split window. |
-| `:LiveRun toggle-numbers` / `:LiveRunToggleNumbers` | Toggles line numbers on or off in the live output split window. |
+| `:LiveRun numbers` | Toggles line numbers on or off in the live output split window. |
 
 ### Keymap Example
 
@@ -163,7 +163,7 @@ Add keybindings to your Neovim configuration (`init.lua`):
 -- Toggle LiveRunner with <leader>lr and stop with <leader>lq
 vim.keymap.set("n", "<leader>lr", "<cmd>LiveRun<cr>", { desc = "Start Live Runner" })
 vim.keymap.set("n", "<leader>lq", "<cmd>LiveRun stop<cr>", { desc = "Stop Live Runner" })
-vim.keymap.set("n", "<leader>ln", "<cmd>LiveRunToggleNumbers<cr>", { desc = "Toggle Output Line Numbers" })
+vim.keymap.set("n", "<leader>ln", "<cmd>LiveRun numbers<cr>", { desc = "Toggle Output Line Numbers" })
 ```
 
 ---

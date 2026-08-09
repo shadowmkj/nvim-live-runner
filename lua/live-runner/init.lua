@@ -152,6 +152,9 @@ end
 
 function M.setup(opts)
 	M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+
+	local subcommands = { "stop", "numbers" }
+
 	vim.api.nvim_create_user_command("LiveRun", function(opts)
 		local arg = opts.args and vim.trim(opts.args):lower() or ""
 		if arg == "" then
@@ -159,14 +162,24 @@ function M.setup(opts)
 			M.attach()
 		elseif arg == "stop" then
 			M.stop()
-		elseif arg == "toggle-numbers" or arg == "numbers" then
+		elseif arg == "numbers" or arg == "toggle-numbers" then
 			M.toggle_line_numbers()
+		else
+			vim.notify("LiveRunner: Unknown subcommand '" .. opts.args .. "'. Valid options: " .. table.concat(subcommands, ", "), vim.log.levels.WARN)
 		end
-	end, { nargs = "?" })
-
-	vim.api.nvim_create_user_command("LiveRunToggleNumbers", function()
-		M.toggle_line_numbers()
-	end, {})
+	end, {
+		nargs = "?",
+		complete = function(arg_lead)
+			local matches = {}
+			local lead = arg_lead:lower()
+			for _, cmd in ipairs(subcommands) do
+				if cmd:find("^" .. lead) then
+					table.insert(matches, cmd)
+				end
+			end
+			return matches
+		end,
+	})
 end
 
 return M
