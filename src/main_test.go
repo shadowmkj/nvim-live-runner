@@ -9,6 +9,7 @@ import (
 )
 
 func TestTCPStreamReading(t *testing.T) {
+	// Create a large payload > 2056 bytes (e.g., 10 KB of Python code)
 	lines := make([]string, 500)
 	for i := 0; i < 500; i++ {
 		lines[i] = "print('Line " + string(rune('A'+(i%26))) + " output')"

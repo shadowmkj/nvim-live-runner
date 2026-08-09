@@ -62,6 +62,8 @@ func runCombinedOutput(ctx context.Context, name string, args ...string) ([]byte
 func handleConnection(conn net.Conn, defaultLang string) {
 	defer conn.Close()
 
+	// Read all incoming payload data until EOF.
+	// Neovim sends the entire code buffer over TCP and closes the client connection write-side.
 	data, err := io.ReadAll(conn)
 	if err != nil && err != io.EOF {
 		fmt.Println("Error reading from TCP connection:", err.Error())
@@ -85,6 +87,7 @@ func handleConnection(conn net.Conn, defaultLang string) {
 		}
 	}
 
+	// Schedule execution with debouncing.
 	f := func() {
 		fmt.Print("\033c")
 
@@ -119,7 +122,7 @@ func handleConnection(conn net.Conn, defaultLang string) {
 
 func main() {
 	portFlag := flag.Int("port", 65432, "TCP port for the server to listen on")
-	langFlag := flag.String("lang", "", "Default file extension / language")
+	langFlag := flag.String("lang", "", "Default file extension / language (e.g., .py, .go, .lua, .js)")
 	flag.Parse()
 
 	lang := *langFlag
