@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -17,13 +19,15 @@ import (
 	"github.com/bep/debounce"
 )
 
-var debouncer = debounce.New(time.Millisecond * 250)
+var (
+	debouncer  = debounce.New(time.Millisecond * 250)
+	execMu     sync.Mutex
+	cancelExec context.CancelFunc
+)
 
 const defaultExecTimeout = 2 * time.Second
 
 func execTimeout() time.Duration {
-	// Optional override for long-running snippets.
-	// Example: NLR_TIMEOUT_MS=5000
 	if v := os.Getenv("NLR_TIMEOUT_MS"); v != "" {
 		ms, err := strconv.Atoi(v)
 		if err == nil && ms > 0 {
@@ -35,7 +39,6 @@ func execTimeout() time.Duration {
 
 func runCombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	// Ensure we can kill any subprocesses the interpreter/compiler spawns.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	out, err := cmd.CombinedOutput()
@@ -56,90 +59,92 @@ func runCombinedOutput(ctx context.Context, name string, args ...string) ([]byte
 	return out, err
 }
 
-func handleConnection(conn net.Conn, lang string) {
-	buffer := make([]byte, 2056)
-	var execMu sync.Mutex
-	var cancelExec context.CancelFunc
+func handleConnection(conn net.Conn, defaultLang string) {
+	defer conn.Close()
 
-	cancelRunning := func() {
+	data, err := io.ReadAll(conn)
+	if err != nil && err != io.EOF {
+		fmt.Println("Error reading from TCP connection:", err.Error())
+		return
+	}
+
+	if len(data) == 0 {
+		return
+	}
+
+	payload := string(data)
+	lang := defaultLang
+	source := payload
+
+	// Extract dynamic language header if provided (format: .py\n<code>)
+	if idx := strings.IndexByte(payload, '\n'); idx != -1 {
+		firstLine := strings.TrimSpace(payload[:idx])
+		if strings.HasPrefix(firstLine, ".") {
+			lang = firstLine
+			source = payload[idx+1:]
+		}
+	}
+
+	f := func() {
+		fmt.Print("\033c")
+
 		execMu.Lock()
-		defer execMu.Unlock()
 		if cancelExec != nil {
 			cancelExec()
 		}
-	}
-	defer cancelRunning()
+		ctx, cancel := context.WithTimeout(context.Background(), execTimeout())
+		cancelExec = cancel
+		execMu.Unlock()
 
-	for {
-		n, err := conn.Read(buffer)
+		defer func() {
+			execMu.Lock()
+			cancel()
+			cancelExec = nil
+			execMu.Unlock()
+		}()
+
+		out, tmpFile, err := executeBuffer(ctx, source, lang)
+		if tmpFile != "" {
+			_ = os.Remove(tmpFile)
+		}
 		if err != nil {
-			if err == io.EOF {
-				cancelRunning()
-				conn.Close()
-				return
-			}
-			fmt.Println("Error reading" + err.Error())
-			continue
+			fmt.Print("ERROR: ", err.Error(), "\n")
 		}
-
-		if n == 0 {
-			fmt.Println("Closing connection")
-			cancelRunning()
-			conn.Close()
-			return
-		}
-
-		if n > 0 {
-			// Copy the read bytes since the debounced function may run after the next Read.
-			b := make([]byte, n)
-			copy(b, buffer[:n])
-			source := string(b)
-
-			f := func() {
-				fmt.Print("\033c")
-
-				execMu.Lock()
-				if cancelExec != nil {
-					cancelExec()
-				}
-				ctx, cancel := context.WithTimeout(context.Background(), execTimeout())
-				cancelExec = cancel
-				execMu.Unlock()
-				defer cancel()
-
-				out, tmpFile, err := executeBuffer(ctx, source, lang)
-				if tmpFile != "" {
-					os.Remove(tmpFile)
-				}
-				if err != nil {
-					print("ERROR: ", err.Error())
-				}
-				println(string(out))
-			}
-			debouncer(f)
+		if len(out) > 0 {
+			fmt.Println(string(out))
 		}
 	}
+	debouncer(f)
 }
 
 func main() {
-	lang := os.Args[1]
-	ln, err := net.Listen("tcp", ":65432")
-	if err != nil {
-		log.Fatal("Error creating socket")
-		return
+	portFlag := flag.Int("port", 65432, "TCP port for the server to listen on")
+	langFlag := flag.String("lang", "", "Default file extension / language")
+	flag.Parse()
+
+	lang := *langFlag
+	if lang == "" && flag.NArg() > 0 {
+		lang = flag.Arg(0)
 	}
-	fmt.Println("Listening..")
+
+	addr := fmt.Sprintf(":%d", *portFlag)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("Error listening on %s: %v", addr, err)
+	}
+	defer ln.Close()
+
+	fmt.Printf("Listening on %s...\n", addr)
 
 	for {
-		stream, err := ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
-			log.Fatal("Error creating socket")
+			log.Println("Error accepting TCP connection:", err)
 			continue
 		}
 
-		go handleConnection(stream, lang)
+		go handleConnection(conn, lang)
 	}
-
 }
 
 func executeBuffer(ctx context.Context, source string, lang string) ([]byte, string, error) {
