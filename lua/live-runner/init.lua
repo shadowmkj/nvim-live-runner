@@ -4,6 +4,7 @@ local uv = vim.loop
 M.config = {
 	port = 65432,
 	bin_path = nil,
+	show_line_numbers = false,
 }
 
 local server_job_id = nil
@@ -15,9 +16,18 @@ local function get_binary_path()
 	return plugin_root .. "../../src/server"
 end
 
+local function apply_window_options()
+	if output_win and vim.api.nvim_win_is_valid(output_win) then
+		local show_num = M.config.show_line_numbers == true
+		vim.api.nvim_set_option_value("number", show_num, { win = output_win })
+		vim.api.nvim_set_option_value("relativenumber", false, { win = output_win })
+	end
+end
+
 local function ensure_output_window()
 	if output_buf and vim.api.nvim_buf_is_valid(output_buf) then
 		if output_win and vim.api.nvim_win_is_valid(output_win) then
+			apply_window_options()
 			return
 		end
 	else
@@ -29,6 +39,7 @@ local function ensure_output_window()
 	vim.cmd("wincmd p")
 	output_win = vim.api.nvim_get_current_win()
 	vim.api.nvim_win_set_buf(output_win, output_buf)
+	apply_window_options()
 	vim.cmd("wincmd p")
 end
 
@@ -54,6 +65,24 @@ local function update_output_buffer(data)
 
 	local count = vim.api.nvim_buf_line_count(output_buf)
 	vim.api.nvim_buf_set_lines(output_buf, count, count, false, data)
+end
+
+function M.toggle_line_numbers()
+	M.config.show_line_numbers = not M.config.show_line_numbers
+	apply_window_options()
+	local status = M.config.show_line_numbers and "ON" or "OFF"
+	print("LiveRunner line numbers: " .. status)
+end
+
+function M.stop()
+	if server_job_id then
+		vim.fn.jobstop(server_job_id)
+		server_job_id = nil
+	end
+	if output_win and vim.api.nvim_win_is_valid(output_win) then
+		vim.api.nvim_win_close(output_win, true)
+		output_win = nil
+	end
 end
 
 function M.start()
@@ -124,20 +153,20 @@ end
 function M.setup(opts)
 	M.config = vim.tbl_deep_extend("force", M.config, opts or {})
 	vim.api.nvim_create_user_command("LiveRun", function(opts)
-		if #opts.args == 0 then
+		local arg = opts.args and vim.trim(opts.args):lower() or ""
+		if arg == "" then
 			M.start()
 			M.attach()
-		else
-			if server_job_id then
-				vim.fn.jobstop(server_job_id)
-				server_job_id = nil
-			end
-			if output_win and vim.api.nvim_win_is_valid(output_win) then
-				vim.api.nvim_win_close(output_win, true)
-				output_win = nil
-			end
+		elseif arg == "stop" then
+			M.stop()
+		elseif arg == "toggle-numbers" or arg == "numbers" then
+			M.toggle_line_numbers()
 		end
 	end, { nargs = "?" })
+
+	vim.api.nvim_create_user_command("LiveRunToggleNumbers", function()
+		M.toggle_line_numbers()
+	end, {})
 end
 
 return M

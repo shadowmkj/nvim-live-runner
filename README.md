@@ -153,6 +153,7 @@ go build -o server
 |---|---|
 | `:LiveRun` | Starts the live runner server and opens the split output window. |
 | `:LiveRun stop` | Stops the live runner background process and closes the output split window. |
+| `:LiveRun toggle-numbers` / `:LiveRunToggleNumbers` | Toggles line numbers on or off in the live output split window. |
 
 ### Keymap Example
 
@@ -162,6 +163,7 @@ Add keybindings to your Neovim configuration (`init.lua`):
 -- Toggle LiveRunner with <leader>lr and stop with <leader>lq
 vim.keymap.set("n", "<leader>lr", "<cmd>LiveRun<cr>", { desc = "Start Live Runner" })
 vim.keymap.set("n", "<leader>lq", "<cmd>LiveRun stop<cr>", { desc = "Stop Live Runner" })
+vim.keymap.set("n", "<leader>ln", "<cmd>LiveRunToggleNumbers<cr>", { desc = "Toggle Output Line Numbers" })
 ```
 
 ---
@@ -172,8 +174,9 @@ Pass a configuration table to `setup()` to override default settings:
 
 ```lua
 require("live-runner").setup({
-    port = 65432,         -- TCP port for the server to listen on
-    bin_path = nil,       -- Custom path to the server binary (defaults to plugin src/server)
+    port = 65432,             -- TCP port for the server to listen on
+    bin_path = nil,           -- Custom path to the server binary (defaults to plugin src/server)
+    show_line_numbers = false, -- Display line numbers in the output window (default: false)
 })
 ```
 
@@ -183,6 +186,7 @@ require("live-runner").setup({
 |---|---|---|---|
 | `port` | `number` | `65432` | TCP port used for communication between Neovim and the Go backend. |
 | `bin_path` | `string|nil` | `nil` | Absolute path to custom `server` executable. If `nil`, auto-resolves to `src/server`. |
+| `show_line_numbers` | `boolean` | `false` | Controls whether line numbers are displayed in the split output window. Default is `false` (off). |
 
 ### Environment Variables
 
