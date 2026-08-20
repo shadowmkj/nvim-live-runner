@@ -120,33 +120,70 @@ func handleConnection(conn net.Conn, defaultLang string) {
 	debouncer(f)
 }
 
-func main() {
-	portFlag := flag.Int("port", 65432, "TCP port for the server to listen on")
-	langFlag := flag.String("lang", "", "Default file extension / language (e.g., .py, .go, .lua, .js)")
-	flag.Parse()
+func parseConfig(args []string) (port int, lang string, err error) {
+	fs := flag.NewFlagSet("server", flag.ContinueOnError)
+	portFlag := fs.Int("port", 65432, "TCP port for the server to listen on")
+	langFlag := fs.String("lang", "", "Default file extension / language (e.g., .py, .go, .lua, .js)")
 
-	lang := *langFlag
-	if lang == "" && flag.NArg() > 0 {
-		lang = flag.Arg(0)
+	if err := fs.Parse(args); err != nil {
+		return 0, "", err
 	}
 
-	addr := fmt.Sprintf(":%d", *portFlag)
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalf("Error listening on %s: %v", addr, err)
+	lang = *langFlag
+	if lang == "" && fs.NArg() > 0 {
+		lang = fs.Arg(0)
 	}
+
+	return *portFlag, lang, nil
+}
+
+func runServer(ln net.Listener, defaultLang string, stopCh <-chan struct{}) error {
 	defer ln.Close()
+	fmt.Printf("Listening on %s...\n", ln.Addr().String())
 
-	fmt.Printf("Listening on %s...\n", addr)
+	if stopCh != nil {
+		go func() {
+			<-stopCh
+			_ = ln.Close()
+		}()
+	}
 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if stopCh != nil {
+				select {
+				case <-stopCh:
+					return nil
+				default:
+				}
+			}
 			log.Println("Error accepting TCP connection:", err)
-			continue
+			return err
 		}
 
-		go handleConnection(conn, lang)
+		go handleConnection(conn, defaultLang)
+	}
+}
+
+func runApp(args []string, stopCh <-chan struct{}) error {
+	port, lang, err := parseConfig(args)
+	if err != nil {
+		return fmt.Errorf("error parsing arguments: %w", err)
+	}
+
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("error listening on %s: %w", addr, err)
+	}
+
+	return runServer(ln, lang, stopCh)
+}
+
+func main() {
+	if err := runApp(os.Args[1:], nil); err != nil {
+		log.Fatal(err)
 	}
 }
 
