@@ -17,6 +17,21 @@ end
 
 local lu = require("luaunit")
 
+-- Helper function to safely create mock executable scripts
+local function create_mock_script(rel_path, content)
+	local full_path = vim.fn.fnamemodify(rel_path, ":p")
+	local dir = vim.fn.fnamemodify(full_path, ":h")
+	vim.fn.mkdir(dir, "p")
+	local f, err = io.open(full_path, "w")
+	if not f then
+		error("Failed to open " .. full_path .. " for writing: " .. tostring(err))
+	end
+	f:write(content or "#!/bin/sh\nwhile true; do sleep 1; done\n")
+	f:close()
+	vim.fn.setfperm(full_path, "rwxr-xr-x")
+	return full_path
+end
+
 -- ==============================================================================
 -- Test Suite: LiveRunnerConfiguration
 -- ==============================================================================
@@ -67,12 +82,7 @@ end
 TestLiveRunnerLifecycle = {}
 
 function TestLiveRunnerLifecycle:setUp()
-	self.mock_bin = vim.fn.fnamemodify("./tmp/mock_server_unit.sh", ":p")
-	vim.fn.mkdir(vim.fn.fnamemodify(self.mock_bin, ":h"), "p")
-	local f = io.open(self.mock_bin, "w")
-	f:write("#!/bin/sh\necho 'Listening on :65432...'\nwhile true; do sleep 1; done\n")
-	f:close()
-	vim.fn.setfperm(self.mock_bin, "rwxr-xr-x")
+	self.mock_bin = create_mock_script("./tmp/mock_server_unit.sh", "#!/bin/sh\necho 'Listening on :65432...'\nwhile true; do sleep 1; done\n")
 end
 
 function TestLiveRunnerLifecycle:tearDown()
@@ -135,13 +145,7 @@ end
 
 function TestLiveRunnerLifecycle:testOutputStreamingAndClearScreen()
 	local runner = require("live-runner")
-
-	-- Mock script that prints clear screen sequence (\033c) followed by lines
-	local echo_bin = vim.fn.fnamemodify("./tmp/mock_echo_unit.sh", ":p")
-	local f = io.open(echo_bin, "w")
-	f:write("#!/bin/sh\nprintf '\\033cLine 1\\nLine 2\\n'\n")
-	f:close()
-	vim.fn.setfperm(echo_bin, "rwxr-xr-x")
+	local echo_bin = create_mock_script("./tmp/mock_echo_unit.sh", "#!/bin/sh\nprintf '\\033cLine 1\\nLine 2\\n'\n")
 
 	runner.setup({ bin_path = echo_bin })
 	runner.start()
@@ -172,11 +176,7 @@ TestLiveRunnerClientAndCommands = {}
 
 function TestLiveRunnerClientAndCommands:testAttachAndBufferEvents()
 	local runner = require("live-runner")
-	local mock_bin = vim.fn.fnamemodify("./tmp/mock_attach_unit.sh", ":p")
-	local f = io.open(mock_bin, "w")
-	f:write("#!/bin/sh\nwhile true; do sleep 1; done\n")
-	f:close()
-	vim.fn.setfperm(mock_bin, "rwxr-xr-x")
+	local mock_bin = create_mock_script("./tmp/mock_attach_unit.sh", "#!/bin/sh\nwhile true; do sleep 1; done\n")
 
 	runner.setup({ bin_path = mock_bin, port = 65431 })
 	runner.start()
@@ -203,11 +203,7 @@ end
 
 function TestLiveRunnerClientAndCommands:testUserCommandExecutionAndCompletion()
 	local runner = require("live-runner")
-	local mock_bin = vim.fn.fnamemodify("./tmp/mock_cmd_unit.sh", ":p")
-	local f = io.open(mock_bin, "w")
-	f:write("#!/bin/sh\nwhile true; do sleep 1; done\n")
-	f:close()
-	vim.fn.setfperm(mock_bin, "rwxr-xr-x")
+	local mock_bin = create_mock_script("./tmp/mock_cmd_unit.sh", "#!/bin/sh\nwhile true; do sleep 1; done\n")
 
 	runner.setup({ bin_path = mock_bin })
 
