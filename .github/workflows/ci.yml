@@ -31,21 +31,32 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Lua
+      - name: Set up Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Install Lua & LuaCov
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.3
+          sudo apt-get install -y lua5.1 luarocks
+          sudo luarocks install luacov
 
       - name: Run Go Tests with Coverage
         working-directory: src
         run: |
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+      - name: Run Lua Tests with Coverage
+        run: |
+          nvim --headless -u NONE -l tests/test_live_runner.lua
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: src/coverage.out
+          files: src/coverage.out,luacov.report.out
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false

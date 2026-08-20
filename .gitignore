@@ -1,3 +1,5 @@
 src/server
 test
 *.out
+luacov.*.out
+tmp/
