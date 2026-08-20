@@ -53,7 +53,7 @@ jobs:
           nvim --headless -u NONE -l tests/test_live_runner.lua
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: src/coverage.out,luacov.report.out
