@@ -37,11 +37,12 @@ jobs:
           neovim: true
           version: stable
 
-      - name: Install Lua & LuaCov
+      - name: Install Lua, LuaCov & LuaUnit
         run: |
           sudo apt-get update
           sudo apt-get install -y lua5.1 luarocks
           sudo luarocks install luacov
+          sudo luarocks install luaunit
 
       - name: Run Go Tests with Coverage
         working-directory: src

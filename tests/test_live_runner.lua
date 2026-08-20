@@ -1,7 +1,6 @@
 -- tests/test_live_runner.lua
--- Unit & Integration tests for nvim-live-runner
+-- Unit & Integration tests for nvim-live-runner using LuaUnit testing framework
 
--- Configure package paths for luarocks and local modules
 local home = os.getenv("HOME") or ""
 package.path = package.path
 	.. ";" .. home .. "/.luarocks/share/lua/5.1/?.lua"
@@ -10,59 +9,28 @@ package.path = package.path
 package.cpath = package.cpath
 	.. ";" .. home .. "/.luarocks/lib/lua/5.1/?.so"
 
--- Start LuaCov coverage collection if available
+-- Initialize LuaCov coverage profiling
 local luacov_ok, luacov_runner = pcall(require, "luacov.runner")
 if luacov_ok then
 	luacov_runner.init()
 end
 
-local function assert_eq(actual, expected, msg)
-	if actual ~= expected then
-		local err = string.format(
-			"ASSERTION FAILED: %s\nExpected: %s (%s)\nActual:   %s (%s)",
-			msg or "",
-			vim.inspect(expected),
-			type(expected),
-			vim.inspect(actual),
-			type(actual)
-		)
-		error(err, 2)
-	end
-end
-
-local function assert_true(cond, msg)
-	if not cond then
-		error("ASSERTION FAILED: " .. (msg or "expected true"), 2)
-	end
-end
-
-local passed = 0
-local failed = 0
-
-local function run_test(name, fn)
-	io.write("RUN: " .. name .. " ... ")
-	local ok, err = pcall(fn)
-	if ok then
-		io.write("PASS\n")
-		passed = passed + 1
-	else
-		io.write("FAIL\n" .. tostring(err) .. "\n")
-		failed = failed + 1
-	end
-end
+local lu = require("luaunit")
 
 -- ==============================================================================
--- Test Suites (Targeting nvim-live-runner functionality only)
+-- Test Suite: LiveRunnerConfiguration
 -- ==============================================================================
 
-run_test("config defaults", function()
+TestLiveRunnerConfiguration = {}
+
+function TestLiveRunnerConfiguration:testDefaultConfiguration()
 	local config = require("live-runner.config")
-	assert_eq(config.port, 65432, "default port must be 65432")
-	assert_eq(config.bin_path, nil, "default bin_path must be nil")
-	assert_eq(config.show_line_numbers, false, "default show_line_numbers must be false")
-end)
+	lu.assertEquals(config.port, 65432, "default port should be 65432")
+	lu.assertNil(config.bin_path, "default bin_path should be nil")
+	lu.assertFalse(config.show_line_numbers, "default show_line_numbers should be false")
+end
 
-run_test("setup with custom options", function()
+function TestLiveRunnerConfiguration:testSetupMergesCustomOptions()
 	local runner = require("live-runner")
 	runner.setup({
 		port = 55555,
@@ -70,23 +38,52 @@ run_test("setup with custom options", function()
 		show_line_numbers = true,
 	})
 
-	assert_eq(runner.config.port, 55555, "port should be overridden")
-	assert_eq(runner.config.bin_path, "/custom/path/to/server", "bin_path should be overridden")
-	assert_eq(runner.config.show_line_numbers, true, "show_line_numbers should be overridden")
-end)
+	lu.assertEquals(runner.config.port, 55555, "port should be overridden")
+	lu.assertEquals(runner.config.bin_path, "/custom/path/to/server", "bin_path should be overridden")
+	lu.assertTrue(runner.config.show_line_numbers, "show_line_numbers should be overridden")
+end
 
-run_test("toggle_line_numbers toggles boolean state and updates window", function()
+-- ==============================================================================
+-- Test Suite: LiveRunnerWindowAndNumbers
+-- ==============================================================================
+
+TestLiveRunnerWindowAndNumbers = {}
+
+function TestLiveRunnerWindowAndNumbers:testToggleLineNumbersState()
 	local runner = require("live-runner")
 	runner.setup({ show_line_numbers = false })
 
 	runner.toggle_line_numbers()
-	assert_eq(runner.config.show_line_numbers, true, "should toggle from false to true")
+	lu.assertTrue(runner.config.show_line_numbers, "toggling from false should yield true")
 
 	runner.toggle_line_numbers()
-	assert_eq(runner.config.show_line_numbers, false, "should toggle from true to false")
-end)
+	lu.assertFalse(runner.config.show_line_numbers, "toggling from true should yield false")
+end
 
-run_test("start fails gracefully when server binary is missing (default and custom path)", function()
+-- ==============================================================================
+-- Test Suite: LiveRunnerLifecycle
+-- ==============================================================================
+
+TestLiveRunnerLifecycle = {}
+
+function TestLiveRunnerLifecycle:setUp()
+	self.mock_bin = vim.fn.fnamemodify("./tmp/mock_server_unit.sh", ":p")
+	vim.fn.mkdir(vim.fn.fnamemodify(self.mock_bin, ":h"), "p")
+	local f = io.open(self.mock_bin, "w")
+	f:write("#!/bin/sh\necho 'Listening on :65432...'\nwhile true; do sleep 1; done\n")
+	f:close()
+	vim.fn.setfperm(self.mock_bin, "rwxr-xr-x")
+end
+
+function TestLiveRunnerLifecycle:tearDown()
+	local runner = require("live-runner")
+	runner.stop()
+	if vim.fn.filereadable(self.mock_bin) == 1 then
+		os.remove(self.mock_bin)
+	end
+end
+
+function TestLiveRunnerLifecycle:testMissingBinaryNotification()
 	local runner = require("live-runner")
 	local notified = false
 	local orig_notify = vim.notify
@@ -96,32 +93,23 @@ run_test("start fails gracefully when server binary is missing (default and cust
 		end
 	end
 
-	-- Custom path
+	-- Test custom missing binary path
 	runner.setup({ bin_path = "/nonexistent/binary/path/server" })
 	runner.start()
-	assert_true(notified, "should notify error when custom binary is missing")
+	lu.assertTrue(notified, "should notify when custom binary is missing")
 
-	-- Default path resolution fallback
+	-- Test default binary resolution fallback when binary is missing
 	notified = false
 	runner.setup({ bin_path = nil })
 	runner.start()
 
 	vim.notify = orig_notify
-end)
+end
 
-run_test("start and window creation with mock binary", function()
+function TestLiveRunnerLifecycle:testStartAndWindowCreation()
 	local runner = require("live-runner")
-
-	-- Create a mock executable script in tmp/
-	local mock_bin = vim.fn.fnamemodify("./tmp/mock_server.sh", ":p")
-	vim.fn.mkdir(vim.fn.fnamemodify(mock_bin, ":h"), "p")
-	local f = io.open(mock_bin, "w")
-	f:write("#!/bin/sh\necho 'Listening on :65432...'\nwhile true; do sleep 1; done\n")
-	f:close()
-	vim.fn.setfperm(mock_bin, "rwxr-xr-x")
-
 	runner.setup({
-		bin_path = mock_bin,
+		bin_path = self.mock_bin,
 		show_line_numbers = false,
 	})
 
@@ -135,32 +123,29 @@ run_test("start and window creation with mock binary", function()
 			break
 		end
 	end
-	assert_true(output_buf ~= nil, "output buffer 'LiveRunner Output' should be created")
-	assert_eq(vim.api.nvim_get_option_value("filetype", { buf = output_buf }), "liverunner", "filetype should be liverunner")
+	lu.assertNotNil(output_buf, "output buffer 'LiveRunner Output' should be created")
+	lu.assertEquals(vim.api.nvim_get_option_value("filetype", { buf = output_buf }), "liverunner", "filetype should be liverunner")
 
-	-- Starting again prints 'Server already running'
+	-- Re-invoking start when already running should be idempotent
 	runner.start()
 
-	-- Clean up
+	-- Clean up via stop()
 	runner.stop()
-	os.remove(mock_bin)
-end)
+end
 
-run_test("output buffer streaming, chunks, and clear screen handling", function()
+function TestLiveRunnerLifecycle:testOutputStreamingAndClearScreen()
 	local runner = require("live-runner")
 
-	-- Setup with a mock binary that outputs data then exits
-	local mock_bin = vim.fn.fnamemodify("./tmp/mock_echo.sh", ":p")
-	vim.fn.mkdir(vim.fn.fnamemodify(mock_bin, ":h"), "p")
-	local f = io.open(mock_bin, "w")
+	-- Mock script that prints clear screen sequence (\033c) followed by lines
+	local echo_bin = vim.fn.fnamemodify("./tmp/mock_echo_unit.sh", ":p")
+	local f = io.open(echo_bin, "w")
 	f:write("#!/bin/sh\nprintf '\\033cLine 1\\nLine 2\\n'\n")
 	f:close()
-	vim.fn.setfperm(mock_bin, "rwxr-xr-x")
+	vim.fn.setfperm(echo_bin, "rwxr-xr-x")
 
-	runner.setup({ bin_path = mock_bin })
+	runner.setup({ bin_path = echo_bin })
 	runner.start()
 
-	-- Wait for job output to flush into buffer
 	vim.wait(300, function() return false end)
 
 	local output_buf = nil
@@ -170,37 +155,43 @@ run_test("output buffer streaming, chunks, and clear screen handling", function(
 			break
 		end
 	end
-	assert_true(output_buf ~= nil, "output buffer must exist")
+	lu.assertNotNil(output_buf, "output buffer must exist")
 
 	local lines = vim.api.nvim_buf_get_lines(output_buf, 0, -1, false)
-	assert_true(#lines >= 1, "output buffer should contain header or output lines")
+	lu.assertTrue(#lines >= 1, "output buffer should contain lines")
 
 	runner.stop()
-	os.remove(mock_bin)
-end)
+	os.remove(echo_bin)
+end
 
-run_test("attach and buffer changes trigger TCP client sending", function()
+-- ==============================================================================
+-- Test Suite: LiveRunnerClientAndCommands
+-- ==============================================================================
+
+TestLiveRunnerClientAndCommands = {}
+
+function TestLiveRunnerClientAndCommands:testAttachAndBufferEvents()
 	local runner = require("live-runner")
-
-	-- Create a mock executable server in tmp/
-	local mock_bin = vim.fn.fnamemodify("./tmp/mock_server_attach.sh", ":p")
-	vim.fn.mkdir(vim.fn.fnamemodify(mock_bin, ":h"), "p")
+	local mock_bin = vim.fn.fnamemodify("./tmp/mock_attach_unit.sh", ":p")
 	local f = io.open(mock_bin, "w")
 	f:write("#!/bin/sh\nwhile true; do sleep 1; done\n")
 	f:close()
 	vim.fn.setfperm(mock_bin, "rwxr-xr-x")
 
-	runner.setup({ bin_path = mock_bin, port = 65430 })
+	runner.setup({ bin_path = mock_bin, port = 65431 })
 	runner.start()
 	runner.attach()
 
-	-- Create a test buffer for a python file
-	local test_buf = vim.api.nvim_create_buf(true, false)
-	vim.api.nvim_buf_set_name(test_buf, "test_file.py")
-	vim.api.nvim_set_current_buf(test_buf)
-	vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, { "print('live test')" })
+	-- Check autocommands exist
+	local autocmds = vim.api.nvim_get_autocmds({ group = "LiveRunnerClient" })
+	lu.assertTrue(#autocmds > 0, "autocommands should be created in LiveRunnerClient group")
 
-	-- Trigger TextChanged event on the buffer
+	-- Create test buffer and trigger autocommands
+	local test_buf = vim.api.nvim_create_buf(true, false)
+	vim.api.nvim_buf_set_name(test_buf, "test_script.py")
+	vim.api.nvim_set_current_buf(test_buf)
+	vim.api.nvim_buf_set_lines(test_buf, 0, -1, false, { "print('unit test')" })
+
 	vim.api.nvim_exec_autocmds("TextChanged", { group = "LiveRunnerClient", buffer = test_buf })
 	vim.api.nvim_exec_autocmds("TextChangedI", { group = "LiveRunnerClient", buffer = test_buf })
 
@@ -208,13 +199,11 @@ run_test("attach and buffer changes trigger TCP client sending", function()
 
 	runner.stop()
 	os.remove(mock_bin)
-end)
+end
 
-run_test("LiveRun command dispatch and completion", function()
+function TestLiveRunnerClientAndCommands:testUserCommandExecutionAndCompletion()
 	local runner = require("live-runner")
-
-	local mock_bin = vim.fn.fnamemodify("./tmp/mock_cmd.sh", ":p")
-	vim.fn.mkdir(vim.fn.fnamemodify(mock_bin, ":h"), "p")
+	local mock_bin = vim.fn.fnamemodify("./tmp/mock_cmd_unit.sh", ":p")
 	local f = io.open(mock_bin, "w")
 	f:write("#!/bin/sh\nwhile true; do sleep 1; done\n")
 	f:close()
@@ -222,17 +211,17 @@ run_test("LiveRun command dispatch and completion", function()
 
 	runner.setup({ bin_path = mock_bin })
 
-	-- Test :LiveRun without arguments (start and attach)
+	-- Test :LiveRun without arguments
 	vim.cmd("LiveRun")
 	vim.cmd("LiveRun stop")
 
 	-- Test :LiveRun numbers
 	vim.cmd("LiveRun numbers")
-	assert_eq(runner.config.show_line_numbers, true, "LiveRun numbers should toggle line numbers to true")
+	lu.assertTrue(runner.config.show_line_numbers, "LiveRun numbers should toggle show_line_numbers to true")
 	vim.cmd("LiveRun numbers")
-	assert_eq(runner.config.show_line_numbers, false, "LiveRun numbers should toggle line numbers to false")
+	lu.assertFalse(runner.config.show_line_numbers, "LiveRun numbers should toggle show_line_numbers back to false")
 
-	-- Test :LiveRun with unknown command warning
+	-- Test unknown subcommand warning
 	local warn_emitted = false
 	local orig_notify = vim.notify
 	vim.notify = function(msg, level)
@@ -241,25 +230,27 @@ run_test("LiveRun command dispatch and completion", function()
 		end
 	end
 
-	vim.cmd("LiveRun invalid_cmd")
+	vim.cmd("LiveRun unknown_option")
 	vim.notify = orig_notify
-	assert_true(warn_emitted, "should warn on unknown subcommand")
+	lu.assertTrue(warn_emitted, "should warn on unknown subcommand")
 
-	-- Test completion via vim.fn.getcompletion
-	local completions = vim.fn.getcompletion("LiveRun num", "cmdline")
-	assert_true(#completions > 0, "should return autocomplete candidates for 'num'")
-	assert_eq(completions[1], "numbers", "candidate should match 'numbers'")
+	-- Test completion candidates
+	local num_candidates = vim.fn.getcompletion("LiveRun num", "cmdline")
+	lu.assertTrue(#num_candidates > 0, "should return completion for 'num'")
+	lu.assertEquals(num_candidates[1], "numbers", "candidate should be 'numbers'")
 
-	local stop_completions = vim.fn.getcompletion("LiveRun st", "cmdline")
-	assert_true(#stop_completions > 0, "should return autocomplete candidates for 'st'")
-	assert_eq(stop_completions[1], "stop", "candidate should match 'stop'")
+	local stop_candidates = vim.fn.getcompletion("LiveRun st", "cmdline")
+	lu.assertTrue(#stop_candidates > 0, "should return completion for 'st'")
+	lu.assertEquals(stop_candidates[1], "stop", "candidate should be 'stop'")
 
 	os.remove(mock_bin)
-end)
+end
 
 -- ==============================================================================
--- Coverage Reporting & Summary
+-- Execute LuaUnit Test Runner
 -- ==============================================================================
+
+local exit_code = lu.LuaUnit.run()
 
 if luacov_ok then
 	luacov_runner.shutdown()
@@ -267,12 +258,4 @@ if luacov_ok then
 	reporter.report()
 end
 
-print(string.format("\n=========================================="))
-print(string.format("Lua Tests Finished: %d Passed, %d Failed", passed, failed))
-print(string.format("=========================================="))
-
-if failed > 0 then
-	os.exit(1)
-else
-	os.exit(0)
-end
+os.exit(exit_code)
